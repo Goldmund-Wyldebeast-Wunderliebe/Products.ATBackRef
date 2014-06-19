@@ -117,6 +117,52 @@ class BackReferenceField(ReferenceField):
             tool.deleteReference(tool.lookupObject(uid), instance.UID(), 
                                  self.relationship)
 
+        #values are set only in reference catalog. They are missing in real content.
+        #I'll try to update objects. If I fail I swallow error.
+        #it makes the previous section irrelevant, but I keep it for back compatibility and permission issues
+        for uid in add:
+            try:
+                obj = tool.lookupObject(uid)
+                if obj:
+                    field = self.getReferenceField(obj)
+                    if field:
+                        if field.multiValued:
+                            values = field.get(obj)
+                            if instance not in values:
+                                values.append(instance)
+                                field.set(obj, values)
+                                obj.reindexObject()
+                        else:
+                            value = field.get(obj)
+                            if value != instance:
+                                field.set(obj, value)
+                                obj.reindexObject()
+            except:
+                pass
+        for uid in sub:
+            try:
+                obj = tool.lookupObject(uid)
+                if obj:
+                    field = self.getReferenceField(obj)
+                    if field:
+                        if field.multiValued:
+                            values = field.get(obj)
+                            if instance in values:
+                                values.remove(instance)
+                                field.set(obj, values)
+                                obj.reindexObject()
+                        else:
+                            value = field.get(obj)
+                            if value == instance:
+                                field.set(obj, '')
+                                obj.reindexObject()
+            except:
+                pass
+
+
+
+
+
         if self.callStorageOnSet:
             #if this option is set the reference fields's values get written
             #to the storage even if the reference field never use the storage
@@ -153,6 +199,15 @@ class BackReferenceField(ReferenceField):
         except AttributeError:
             pass
         return refs
+
+    def getReferenceField(self, obj):
+        """
+        I iterate over ReferenceFields and locate one with the right relationship name
+        """
+        for field in obj.Schema().fields():
+            if isinstance(field, ReferenceField) and field.relationship == self.relationship:
+               return field
+
 
 
 registerField(BackReferenceField,
